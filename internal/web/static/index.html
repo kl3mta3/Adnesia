@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adnesia</title>
+<link rel="icon" href="/static/favicon.ico">
+<style>
+  :root{
+    --bg:#0e1013; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+    --text:#eef2f6; --muted:#8b94a3; --orange:#ff7a1a; --orange2:#ff9a4d;
+    --on:#2ec27e; --off:#e5564e; --shadow:0 2px 10px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:15px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--orange2)}
+  .wrap{max-width:980px;margin:0 auto;padding:22px 16px 70px}
+  header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  header img{width:44px;height:44px;border-radius:10px}
+  header .name{font-size:22px;font-weight:800;letter-spacing:-.5px}
+  header .name b{color:var(--orange)}
+  header .sub{color:var(--muted);font-size:12px;margin-top:-2px}
+  .grow{flex:1}
+
+  /* Hero status */
+  .hero{display:flex;align-items:center;gap:22px;background:var(--panel);
+    border:1px solid var(--border);border-radius:16px;padding:22px 24px;
+    box-shadow:var(--shadow);margin-bottom:18px}
+  .hero .badge{width:76px;height:76px;border-radius:18px;display:grid;place-items:center;
+    font-size:38px;flex-shrink:0}
+  .hero.on .badge{background:rgba(46,194,126,.14);color:var(--on)}
+  .hero.off .badge{background:rgba(229,86,78,.14);color:var(--off)}
+  .hero .state{font-size:30px;font-weight:800;letter-spacing:-.5px}
+  .hero.on .state{color:var(--on)} .hero.off .state{color:var(--off)}
+  .hero .desc{color:var(--muted);font-size:13px;max-width:52ch}
+  .bigbtn{font:inherit;font-weight:700;cursor:pointer;border:none;border-radius:12px;
+    padding:14px 26px;font-size:16px;color:#1a1205}
+  .bigbtn.turnoff{background:#2a2f3a;color:var(--text)}
+  .bigbtn.turnon{background:linear-gradient(180deg,var(--orange2),var(--orange));
+    box-shadow:0 4px 16px rgba(255,122,26,.35)}
+
+  .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:16px}
+  @media (max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;
+    box-shadow:var(--shadow);overflow:hidden}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);
+    margin:0;padding:16px 18px 10px}
+
+  /* Toggle rows */
+  .feat{display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:1px solid var(--border)}
+  .feat .ic{width:30px;height:30px;border-radius:8px;background:var(--panel2);display:grid;
+    place-items:center;font-size:15px}
+  .feat .t{flex:1}
+  .feat .t .lbl{font-weight:600}
+  .feat .t .hint{color:var(--muted);font-size:12px}
+  body.masteroff .feat{opacity:.45;pointer-events:none}
+
+  /* Switch */
+  .sw{position:relative;width:46px;height:26px;flex-shrink:0}
+  .sw input{opacity:0;width:0;height:0;position:absolute}
+  .sw .tr{position:absolute;inset:0;background:#3a4150;border-radius:999px;transition:.18s}
+  .sw .tr:before{content:"";position:absolute;width:20px;height:20px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:.18s}
+  .sw input:checked + .tr{background:linear-gradient(180deg,var(--orange2),var(--orange))}
+  .sw input:checked + .tr:before{transform:translateX(20px)}
+
+  /* Stats */
+  .stat{display:flex;align-items:baseline;justify-content:space-between;
+    padding:12px 18px;border-top:1px solid var(--border)}
+  .stat .k{color:var(--muted);font-size:13px}
+  .stat .v{font-size:20px;font-weight:800;letter-spacing:-.5px}
+  .stat .v.ads{color:var(--orange2)}
+
+  /* Browsers */
+  .brow{display:flex;align-items:center;gap:10px;padding:11px 18px;border-top:1px solid var(--border);font-size:14px}
+  .brow .st{margin-left:auto;font-size:12px;font-weight:700}
+  .brow .st.ok{color:var(--on)} .brow .st.warn{color:var(--orange2)}
+
+  /* Recent + bypass */
+  h3{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:26px 0 10px}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:9px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  td.host{font-weight:600}
+  td.url{color:var(--muted);max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td.time{color:var(--muted);white-space:nowrap}
+  .empty{padding:18px;color:var(--muted)}
+  details{margin-top:12px}
+  summary{cursor:pointer;color:var(--muted);font-size:13px}
+  .bprow{display:flex;align-items:center;gap:8px;padding:8px 2px;font-size:13px;border-bottom:1px solid var(--border)}
+  .bprow .tag{font-size:10px;padding:2px 7px;border-radius:6px;background:var(--panel2);color:var(--muted);text-transform:uppercase}
+  .bprow .x{margin-left:auto;color:var(--off);cursor:pointer;background:none;border:none;font-weight:700}
+  .addbar{display:flex;gap:8px;margin:10px 0}
+  .addbar input{flex:1;font:inherit;padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg);color:var(--text)}
+  .addbar button{font:inherit;font-weight:600;border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:9px;padding:9px 16px;cursor:pointer}
+  .foot{color:var(--muted);font-size:12px;margin-top:26px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="/static/logo.png" alt="Adnesia">
+    <div>
+      <div class="name"><b>Ad</b>nesia</div>
+      <div class="sub">self-owned ad blocker</div>
+    </div>
+  </header>
+
+  <div id="hero" class="hero off">
+    <div class="badge" id="heroIcon">●</div>
+    <div class="grow">
+      <div class="state" id="heroState">—</div>
+      <div class="desc" id="heroDesc"></div>
+    </div>
+    <button id="master" class="bigbtn turnon">—</button>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Real-Time Protection</h2>
+      <div id="features"></div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Protection History</h2>
+        <div class="stat"><span class="k">Ads Blocked</span><span class="v ads" id="s-ads">0</span></div>
+        <div class="stat"><span class="k">Trackers Blocked</span><span class="v" id="s-trackers">0</span></div>
+        <div class="stat"><span class="k">Annoyances Blocked</span><span class="v" id="s-annoy">0</span></div>
+        <div class="stat"><span class="k">Threats Blocked</span><span class="v" id="s-threats">0</span></div>
+        <div class="stat"><span class="k">Blocked Content</span><span class="v" id="s-mb">0 MB</span></div>
+        <div class="stat"><span class="k">Saved Time</span><span class="v" id="s-time">0 min</span></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <h2>Protected Browsers</h2>
+        <div class="brow">🌐 Google Chrome<span class="st" id="b-chrome">—</span></div>
+        <div class="brow">🧭 Microsoft Edge<span class="st" id="b-edge">—</span></div>
+        <div class="brow">🦊 Firefox<span class="st warn" id="b-firefox">needs cert</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Recently blocked</h3>
+  <div class="card">
+    <table><thead><tr><th>Host</th><th>URL</th><th>When</th></tr></thead><tbody id="log"></tbody></table>
+    <div id="logempty" class="empty">Nothing blocked yet.</div>
+  </div>
+
+  <details>
+    <summary>Passthrough (sites never intercepted)</summary>
+    <div class="addbar">
+      <input id="bpin" placeholder="add a host pattern, e.g. *.mybank.com">
+      <button id="bpadd">Add</button>
+    </div>
+    <div id="bplist"></div>
+  </details>
+
+  <div class="foot" id="foot">proxy —</div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

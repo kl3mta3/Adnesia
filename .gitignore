@@ -1,0 +1,14 @@
+# Build output
+/adnesia.exe
+*.exe
+dist/
+tools/
+# Note: vendor/ IS committed — dependencies are vendored and pinned on purpose.
+
+# WinDivert runtime binaries — fetched + verified via fetch-windivert.ps1,
+# obtained from the official signed release rather than committed here.
+/WinDivert.dll
+/WinDivert64.sys
+
+# Local scratch
+*.log
