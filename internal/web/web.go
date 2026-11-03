@@ -13,9 +13,11 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"adnesia/internal/bypass"
 	"adnesia/internal/stats"
+	"adnesia/internal/update"
 )
 
 //go:embed static/*
@@ -41,8 +43,16 @@ type Options struct {
 	NetworkRules  int
 	CosmeticRules int
 	ProxyAddr     string
-	Build         string // build stamp, so the dashboard shows which copy is running
+	Build         string  // build stamp, so the dashboard shows which copy is running
+	Version       string  // release version shown beside the build stamp
+	Updater       Updater // optional: GitHub release check
 	Log           *slog.Logger
+}
+
+// Updater reports and triggers the release check (see internal/update).
+type Updater interface {
+	Status() update.Status
+	Check(ctx context.Context) update.Status
 }
 
 // Server is the dashboard HTTP server.
@@ -60,6 +70,9 @@ func New(opts Options) *Server {
 	mux.HandleFunc("/proxy.pac", s.handlePAC)
 	mux.HandleFunc("/api/status", s.handleStatus)
 	mux.HandleFunc("/api/stats", s.handleStats)
+	mux.HandleFunc("/api/stats/clear", s.handleStatsClear)
+	mux.HandleFunc("/api/update", s.handleUpdate)
+	mux.HandleFunc("/api/update/check", s.handleUpdateCheck)
 	mux.HandleFunc("/api/toggle", s.handleToggle)
 	mux.HandleFunc("/api/feature", s.handleFeature)
 	mux.HandleFunc("/api/bypass", s.handleBypass)
@@ -121,6 +134,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"transparent_status": s.opts.Controller.TransparentStatus(),
 		"ca_trusted":         s.opts.Controller.CATrusted(),
 		"build":              s.opts.Build,
+		"version":            s.opts.Version,
 		"proxy_addr":         s.opts.ProxyAddr,
 		"network_rules":      s.opts.NetworkRules,
 		"cosmetic_rules":     s.opts.CosmeticRules,
@@ -149,6 +163,15 @@ func (s *Server) handleFeature(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.opts.Stats.Snapshot())
+}
+
+func (s *Server) handleStatsClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	s.opts.Stats.ClearRecent()
+	writeJSON(w, map[string]any{"cleared": true})
 }
 
 func (s *Server) handleToggle(w http.ResponseWriter, r *http.Request) {
@@ -212,4 +235,28 @@ func writeJSON(w http.ResponseWriter, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	_ = enc.Encode(v)
+}
+
+// handleUpdate reports the last release-check result.
+func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
+	if s.opts.Updater == nil {
+		writeJSON(w, update.Status{Current: s.opts.Version})
+		return
+	}
+	writeJSON(w, s.opts.Updater.Status())
+}
+
+// handleUpdateCheck runs a release check now (the dashboard's button).
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.opts.Updater == nil {
+		writeJSON(w, update.Status{Current: s.opts.Version})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+	writeJSON(w, s.opts.Updater.Check(ctx))
 }

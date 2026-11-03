@@ -35,6 +35,7 @@ import (
 	"adnesia/internal/stats"
 	"adnesia/internal/sysproxy"
 	"adnesia/internal/transparent"
+	"adnesia/internal/update"
 	"adnesia/internal/tray"
 	"adnesia/internal/web"
 )
@@ -42,6 +43,16 @@ import (
 // build is stamped at link time (-X main.build=...) and shown on the dashboard
 // so it's always clear which copy is running.
 var build = "dev"
+
+// version is the release Adnesia reports to the dashboard and compares with
+// the newest GitHub release (see internal/update). Bump it with each release.
+var version = "0.9.0"
+
+// Where releases are published; the update checker reads releases/latest.
+const (
+	repoOwner = "kl3mta3"
+	repoName  = "Adnesia"
+)
 
 type flags struct {
 	verbose      bool
@@ -195,6 +206,7 @@ type app struct {
 	watchdog  *os.Process
 	caTrusted bool
 	stats    *stats.Stats
+	updater  *update.Checker
 	engine *filter.Engine
 	cos    *cosmetic.Engine
 
@@ -252,6 +264,10 @@ func (a *app) start() error {
 		}
 	}()
 
+	// Daily GitHub release check (notify only; never self-replaces the exe).
+	a.updater = update.New(repoOwner, repoName, version, "", a.log)
+	go a.updater.Run(24 * time.Hour)
+
 	a.web = web.New(web.Options{
 		Addr:          a.cfg.DashboardAddr,
 		Controller:    a,
@@ -261,6 +277,8 @@ func (a *app) start() error {
 		CosmeticRules: a.cos.Count(),
 		ProxyAddr:     a.cfg.ProxyAddr,
 		Build:         build,
+		Version:       version,
+		Updater:       a.updater,
 		Log:           a.log,
 	})
 	go func() {
@@ -385,6 +403,9 @@ func friendlyTransErr(err error) string {
 
 // stop tears the core down and restores the system proxy.
 func (a *app) stop() {
+	if a.updater != nil {
+		a.updater.Stop()
+	}
 	if a.trans != nil {
 		a.trans.Stop()
 	}

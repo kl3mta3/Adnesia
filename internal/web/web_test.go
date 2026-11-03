@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 
 	"adnesia/internal/bypass"
 	"adnesia/internal/stats"
+	"adnesia/internal/update"
 )
 
 type fakeController struct {
@@ -32,7 +34,7 @@ func (f *fakeController) SetFeature(name string, on bool) bool {
 	return true
 }
 func (f *fakeController) TransparentStatus() string { return "off" }
-func (f *fakeController) CATrusted() bool          { return true }
+func (f *fakeController) CATrusted() bool           { return true }
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
@@ -81,5 +83,67 @@ func TestToggleRoute(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"enabled":false`) {
 		t.Errorf("toggle should have flipped to disabled, got %s", rec.Body.String())
+	}
+}
+
+func TestStatsClearRoute(t *testing.T) {
+	s := newTestServer(t)
+	s.opts.Stats.RecordBlocked(0, "ads.example", "https://ads.example/x.js")
+	if n := len(s.opts.Stats.Snapshot().Recent); n != 1 {
+		t.Fatalf("want 1 recent entry before clear, got %d", n)
+	}
+
+	rec := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/stats/clear", nil))
+	if rec.Code != 405 {
+		t.Fatalf("GET clear status = %d, want 405", rec.Code)
+	}
+
+	rec = httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("POST", "/api/stats/clear", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"cleared":true`) {
+		t.Fatalf("POST clear: %d %s", rec.Code, rec.Body.String())
+	}
+	snap := s.opts.Stats.Snapshot()
+	if len(snap.Recent) != 0 {
+		t.Errorf("recent should be empty after clear, got %d", len(snap.Recent))
+	}
+	if snap.Blocked != 1 {
+		t.Errorf("counters must survive a clear, blocked = %d", snap.Blocked)
+	}
+}
+
+type fakeUpdater struct{ st update.Status }
+
+func (f *fakeUpdater) Status() update.Status { return f.st }
+func (f *fakeUpdater) Check(context.Context) update.Status {
+	f.st.Latest, f.st.URL, f.st.Available = "1.0.0", "https://example/rel", true
+	return f.st
+}
+
+func TestUpdateRoutes(t *testing.T) {
+	s := newTestServer(t)
+	rec := httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/update", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"available":false`) {
+		t.Fatalf("no updater: %d %s", rec.Code, rec.Body.String())
+	}
+
+	s.opts.Updater = &fakeUpdater{st: update.Status{Current: "0.9.0"}}
+	s.opts.Version = "0.9.0"
+	rec = httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/update/check", nil))
+	if rec.Code != 405 {
+		t.Fatalf("GET check status = %d, want 405", rec.Code)
+	}
+	rec = httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("POST", "/api/update/check", nil))
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"latest":"1.0.0"`) || !strings.Contains(rec.Body.String(), `"available":true`) {
+		t.Fatalf("POST check: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	s.http.Handler.ServeHTTP(rec, httptest.NewRequest("GET", "/api/status", nil))
+	if !strings.Contains(rec.Body.String(), `"version":"0.9.0"`) {
+		t.Errorf("status should carry the version: %s", rec.Body.String())
 	}
 }

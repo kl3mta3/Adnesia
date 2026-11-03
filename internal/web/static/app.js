@@ -65,7 +65,7 @@ function renderStatus(st){
   $("b-edge").textContent = on?"protected":"unprotected";
   $("b-edge").className = "st "+(on?"ok":"warn");
 
-  $("foot").textContent = "proxy "+(st.proxy_addr||"")+(st.build ? "  ·  build "+st.build : "");
+  $("foot").textContent = (st.version ? "Adnesia v"+st.version+"  ·  " : "")+"proxy "+(st.proxy_addr||"")+(st.build ? "  ·  build "+st.build : "");
 }
 
 function renderStats(s){
@@ -76,10 +76,24 @@ function renderStats(s){
   $("s-mb").textContent = (s.saved_mb||0).toFixed(1)+" MB";
   $("s-time").textContent = fmt(s.saved_minutes)+" min";
 
-  const log=$("log"), recent=s.recent||[];
-  $("logempty").style.display = recent.length?"none":"block";
+  recentAll = s.recent||[];
+  renderLog();
+}
+
+// Recently-blocked panel: client-side pages over the server's ring buffer.
+let recentAll = [], logPage = 0;
+function logSize(){ return parseInt($("logsize").value,10)||25; }
+function renderLog(){
+  const log=$("log"), size=logSize();
+  const pages=Math.max(1, Math.ceil(recentAll.length/size));
+  if(logPage>pages-1) logPage=pages-1;
+  $("logempty").style.display = recentAll.length?"none":"block";
+  $("logpage").textContent = (logPage+1)+" / "+pages;
+  $("logprev").disabled = logPage<=0;
+  $("lognext").disabled = logPage>=pages-1;
+  $("logclear").disabled = recentAll.length===0;
   log.innerHTML="";
-  for(const e of recent.slice(0,50)){
+  for(const e of recentAll.slice(logPage*size, (logPage+1)*size)){
     const tr=document.createElement("tr");
     const h=document.createElement("td"); h.className="host"; h.textContent=e.host;
     const u=document.createElement("td"); u.className="url"; u.textContent=e.url;
@@ -110,6 +124,11 @@ $("master").onclick = async ()=>{ try{ await postJSON("/api/toggle"); }catch(e){
 $("bpadd").onclick = async ()=>{ const v=$("bpin").value.trim(); if(!v) return;
   await postJSON("/api/bypass/add",{pattern:v}); $("bpin").value=""; refreshBypass(); };
 $("bpin").addEventListener("keydown",(e)=>{ if(e.key==="Enter") $("bpadd").click(); });
+$("logsize").onchange = ()=>{ logPage=0; try{ localStorage.setItem("adnesia.logsize", $("logsize").value); }catch(e){} renderLog(); };
+$("logprev").onclick = ()=>{ logPage=Math.max(0,logPage-1); renderLog(); };
+$("lognext").onclick = ()=>{ logPage++; renderLog(); };
+$("logclear").onclick = async ()=>{ try{ await postJSON("/api/stats/clear"); }catch(e){} logPage=0; refreshStats(); };
+try{ const v=localStorage.getItem("adnesia.logsize"); if(v) $("logsize").value=v; }catch(e){}
 
 (async function init(){
   buildFeatures();
@@ -117,3 +136,29 @@ $("bpin").addEventListener("keydown",(e)=>{ if(e.key==="Enter") $("bpadd").click
   setInterval(refreshStats, 2000);
   setInterval(refreshStatus, 10000);
 })();
+
+// Updates card: shows the running version and the latest GitHub release.
+function renderUpdate(u){
+  $("upd-ver").textContent = u.current ? "v"+u.current : "";
+  const msg=$("upd-msg"), link=$("upd-link"), btn=$("upd-check");
+  msg.className="hint";
+  btn.disabled = !!u.checking;
+  btn.textContent = u.checking ? "Checking…" : "Check for updates";
+  const when = u.last_checked && !u.last_checked.startsWith("0001") ? " · checked "+ago(u.last_checked) : "";
+  if(u.available){
+    msg.textContent = "Update available: v"+u.latest+when; msg.classList.add("avail");
+    link.href = u.url || "https://github.com/kl3mta3/Adnesia/releases"; link.hidden=false;
+  } else {
+    link.hidden=true;
+    if(u.error) { msg.textContent = (u.error==="no release published yet" ? "No release published yet" : "Check failed: "+u.error)+when; if(u.error!=="no release published yet") msg.classList.add("err"); }
+    else if(u.latest) msg.textContent = "You're up to date (latest v"+u.latest+")"+when;
+    else msg.textContent = "Checks GitHub once a day for a new release.";
+  }
+}
+async function refreshUpdate(){ try{ renderUpdate(await getJSON("/api/update")); }catch(e){} }
+$("upd-check").onclick = async ()=>{
+  const btn=$("upd-check"); btn.disabled=true; btn.textContent="Checking…";
+  try{ renderUpdate(await postJSON("/api/update/check")); }catch(e){ btn.disabled=false; btn.textContent="Check for updates"; }
+};
+refreshUpdate();
+setInterval(refreshUpdate, 60000);

@@ -15,7 +15,7 @@ import (
 // Rough per-blocked-request estimates for the "saved" figures, in the spirit
 // of other blockers' dashboards. These are deliberately approximate.
 const (
-	bytesPerBlock = 50 * 1024          // ~50 KB of ad/tracker payload avoided
+	bytesPerBlock = 50 * 1024 // ~50 KB of ad/tracker payload avoided
 	timePerBlock  = 50 * time.Millisecond
 )
 
@@ -28,15 +28,15 @@ type Entry struct {
 
 // Snapshot is an immutable view of the counters and recent blocks.
 type Snapshot struct {
-	Total       uint64  `json:"total"`
-	Blocked     uint64  `json:"blocked"`
-	Ads         uint64  `json:"ads"`
-	Trackers    uint64  `json:"trackers"`
-	Annoyances  uint64  `json:"annoyances"`
-	Threats     uint64  `json:"threats"`
-	SavedMB     float64 `json:"saved_mb"`
-	SavedMinutes int    `json:"saved_minutes"`
-	Recent      []Entry `json:"recent"`
+	Total        uint64  `json:"total"`
+	Blocked      uint64  `json:"blocked"`
+	Ads          uint64  `json:"ads"`
+	Trackers     uint64  `json:"trackers"`
+	Annoyances   uint64  `json:"annoyances"`
+	Threats      uint64  `json:"threats"`
+	SavedMB      float64 `json:"saved_mb"`
+	SavedMinutes int     `json:"saved_minutes"`
+	Recent       []Entry `json:"recent"`
 }
 
 // Stats holds live counters and a ring buffer of recent blocks.
@@ -106,4 +106,15 @@ func (s *Stats) Snapshot() Snapshot {
 		SavedMinutes: int(time.Duration(blocked) * timePerBlock / time.Minute),
 		Recent:       recent,
 	}
+}
+
+// ClearRecent empties the recently-blocked history. Counters are kept.
+func (s *Stats) ClearRecent() {
+	s.mu.Lock()
+	for i := range s.ring {
+		s.ring[i] = Entry{}
+	}
+	s.next = 0
+	s.full = false
+	s.mu.Unlock()
 }
